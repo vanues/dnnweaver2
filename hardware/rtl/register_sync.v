@@ -4,6 +4,12 @@
 // Hardik Sharma
 // (hsharma@gatech.edu)
 
+/*
+module sum:
+  wire(int)-reg-wire(out)
+  a register with sync;
+*/
+
 `timescale 1ns/1ps
 module register_sync #(
   parameter integer WIDTH                 = 8
@@ -15,9 +21,9 @@ module register_sync #(
   output wire        [ WIDTH -1 : 0 ]     out
 );
 
-  reg [ WIDTH -1 : 0 ] out_reg;
+  reg [ WIDTH -1 : 0 ] out_reg;//internal reg 
 
-  always @(posedge clk)
+  always @(posedge clk)//sync clock
   begin
     // if (reset)
       // out_reg <= 'b0;

@@ -1,4 +1,9 @@
 `timescale 1ns/1ps
+/*
+module sum:
+function first in first out
+able to write data and read data to/from this fifo
+*/
 module fifo
 #(  // Parameters
   parameter          DATA_WIDTH                   = 64,
@@ -32,11 +37,15 @@ module fifo
   reg  [ ADDR_WIDTH           -1 : 0 ]        wr_pointer; //Write Pointer
   reg  [ ADDR_WIDTH           -1 : 0 ]        rd_pointer; //Read Pointer
 
-  reg _almost_full;
-  reg _almost_empty;
+  reg _almost_full;//near 4 free space left
+  reg _almost_empty;//near 4 space used
+  /*
+  ||||    ...      ||||
+  0  AE           AF  FULL
+  */
 
   (* ram_style = TYPE *)
-  reg     [DATA_WIDTH   -1 : 0 ]    mem[0:RAM_DEPTH-1];
+  reg     [DATA_WIDTH   -1 : 0 ]    mem[0:RAM_DEPTH-1]; //mem bits: RAM_DEPTH * DATA_WIDTH
 // ******************************************************************
 // FIFO Logic
 // ******************************************************************
@@ -46,46 +55,50 @@ module fifo
     end
   end
 
+  //Fifo status(empty or full) logic
   always @ (fifo_count)
   begin : FIFO_STATUS
     empty   = (fifo_count == 0);
     full    = (fifo_count == RAM_DEPTH);
   end
 
-  always @(posedge clk)
+  //_almost_full reg part
+  always @(posedge clk)//almost_full part (4 free space)
   begin
     if (reset)
-      _almost_full <= 1'b0;
-    else if (s_write_req && !s_read_req && fifo_count == RAM_DEPTH-4)
+      _almost_full <= 1'b0;//set almost full to 0
+    else if (s_write_req && !s_read_req && fifo_count == RAM_DEPTH-4)//write data while 4 space left, set almost full to 1
       _almost_full <= 1'b1;
-    else if (~s_write_req && s_read_req && fifo_count == RAM_DEPTH-4)
+    else if (~s_write_req && s_read_req && fifo_count == RAM_DEPTH-4)//read data while 4 space left, cancel almost full
       _almost_full <= 1'b0;
   end
-  assign almost_full = _almost_full;
+  assign almost_full = _almost_full;//reg output
 
-  always @(posedge clk)
+  //_almost_empty reg part
+  always @(posedge clk)//almost_empty part (4 mem space used)
   begin
     if (reset)
       _almost_empty <= 1'b0;
-    else if (~s_write_req && s_read_req && fifo_count == 4)
+    else if (~s_write_req && s_read_req && fifo_count == 4)//set almost empty to 1 if (4 used and read needed)
       _almost_empty <= 1'b1;
-    else if (s_write_req && ~s_read_req && fifo_count == 4)
+    else if (s_write_req && ~s_read_req && fifo_count == 4)//cancel almost empty if (4 used and write in need)
       _almost_empty <= 1'b0;
   end
-  assign almost_empty = _almost_empty;
+  assign almost_empty = _almost_empty;//reg output
 
-  assign s_read_ready = !empty;
-  assign s_write_ready = !full;
+  assign s_read_ready = !empty;//read is ready while not empty
+  assign s_write_ready = !full;//write is ready while not full
 
+  //fifo counters reg part
   always @ (posedge clk)
   begin : FIFO_COUNTER
     if (reset)
-      fifo_count <= 0;
+      fifo_count <= 0;//reset counter
 
-    else if (s_write_req && (!s_read_req||s_read_req&&empty) && !full)
+    else if (s_write_req && (!s_read_req||s_read_req&&empty) && !full)//has a write req and not full and (no read req or want to read but empty[read and write both have req])
       fifo_count <= fifo_count + 1;
 
-    else if (s_read_req && (!s_write_req||s_write_req&&full) && !empty)
+    else if (s_read_req && (!s_write_req||s_write_req&&full) && !empty)//both have req but write is full;
       fifo_count <= fifo_count - 1;
   end
 
@@ -94,7 +107,7 @@ module fifo
     if (reset) begin
       wr_pointer <= 0;
     end
-    else if (s_write_req && !full) begin
+    else if (s_write_req && !full) begin//has a write req and not full, able to write
       wr_pointer <= wr_pointer + 1;
     end
   end
@@ -104,7 +117,7 @@ module fifo
     if (reset) begin
       rd_pointer <= 0;
     end
-    else if (s_read_req && !empty) begin
+    else if (s_read_req && !empty) begin//has a read req and not empty, able to read
       rd_pointer <= rd_pointer + 1;
     end
   end
@@ -112,7 +125,7 @@ module fifo
   always @ (posedge clk)
   begin : WRITE
     if (s_write_req & !full) begin
-      mem[wr_pointer] <= s_write_data;
+      mem[wr_pointer] <= s_write_data;//write data to wr pointer
     end
   end
 
@@ -122,10 +135,10 @@ module fifo
       s_read_data <= 0;
     end
     if (s_read_req && !empty) begin
-      s_read_data <= mem[rd_pointer];
+      s_read_data <= mem[rd_pointer];//read data from rd ptr
     end
     else begin
-      s_read_data <= s_read_data;
+      s_read_data <= s_read_data;//no read req or empty
     end
   end
 

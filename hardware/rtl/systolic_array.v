@@ -6,7 +6,7 @@
 
 `timescale 1ns/1ps
 module systolic_array #(
-    parameter integer  ARRAY_N                      = 4,
+    parameter integer  ARRAY_N                      = 4,//NxM
     parameter integer  ARRAY_M                      = 4,
     parameter          DTYPE                        = "FXP", // FXP for Fixed-point, FP32 for single precision, FP16 for half-precision
 
@@ -15,7 +15,7 @@ module systolic_array #(
     parameter integer  BIAS_WIDTH                   = 32,
     parameter integer  ACC_WIDTH                    = 48,
 
-      // General
+    // General
     parameter integer  MULT_OUT_WIDTH               = ACT_WIDTH + WGT_WIDTH,
     parameter integer  PE_OUT_WIDTH                 = MULT_OUT_WIDTH + $clog2(ARRAY_N),
 
@@ -25,7 +25,7 @@ module systolic_array #(
     parameter integer  OUT_WIDTH                    = ARRAY_M * ACC_WIDTH,
     parameter integer  BBUF_DATA_WIDTH              = ARRAY_M * BIAS_WIDTH,
 
-  // Address for buffers
+    // Address for buffers
     parameter integer  OBUF_ADDR_WIDTH              = 16,
     parameter integer  BBUF_ADDR_WIDTH              = 16
         ) (

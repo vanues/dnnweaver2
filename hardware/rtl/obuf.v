@@ -7,7 +7,7 @@
 module obuf #(
   parameter integer  TAG_W                        = 2,  // Log number of banks
   parameter integer  MEM_DATA_WIDTH               = 64,
-  parameter integer  ARRAY_M                      = 2,
+  parameter integer  ARRAY_M                      = 2,//有ARRAY_M个banked_ram模块
   parameter integer  DATA_WIDTH                   = 32,
   parameter integer  BUF_ADDR_WIDTH               = 10,
 
@@ -107,7 +107,7 @@ module obuf #(
         end
 
       end
-
+      //每个banked_ram里有2^TAG_W 个banked_mem
       banked_ram #(
         .TAG_W                          ( TAG_W                          ),
         .ADDR_WIDTH                     ( LOCAL_ADDR_W                   ),

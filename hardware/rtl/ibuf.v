@@ -3,17 +3,23 @@
 //
 // Hardik Sharma
 // (hsharma@gatech.edu)
+
+/*
+module sum:
+write | read buf from mem
+with batch?
+*/
 `timescale 1ns/1ps
 module ibuf #(
-    parameter integer  TAG_W                        = 2,  // Log number of banks
+    parameter integer  TAG_W                        = 2,  // Log number of banks, NEVER USED
     parameter integer  MEM_DATA_WIDTH               = 64,
     parameter integer  ARRAY_N                      = 1,
     parameter integer  DATA_WIDTH                   = 32,
     parameter integer  BUF_ADDR_WIDTH               = 10,
 
     parameter integer  GROUP_SIZE                   = MEM_DATA_WIDTH / DATA_WIDTH,
-    parameter integer  GROUP_ID_W                   = GROUP_SIZE == 1 ? 0 : $clog2(GROUP_SIZE),
-    parameter integer  BUF_ID_W                     = $clog2(ARRAY_N) - GROUP_ID_W,
+    parameter integer  GROUP_ID_W                   = GROUP_SIZE == 1 ? 0 : $clog2(GROUP_SIZE), //cal 2^GROUP_SIZE; WIDTH in digital range 2^WDITH
+    parameter integer  BUF_ID_W                     = $clog2(ARRAY_N) - GROUP_ID_W,//BUF ID WIDTH, to locate buf?
 
     parameter integer  MEM_ADDR_WIDTH               = BUF_ADDR_WIDTH + BUF_ID_W,
     parameter integer  BUF_DATA_WIDTH               = ARRAY_N * DATA_WIDTH
@@ -47,8 +53,8 @@ module ibuf #(
 
       wire                                        buf_read_req_fwd;
       wire [ LOCAL_ADDR_W         -1 : 0 ]        buf_read_addr_fwd;
-      register_sync #(1) read_req_fwd (clk, reset, local_buf_read_req, buf_read_req_fwd);
-      register_sync #(LOCAL_ADDR_W) read_addr_fwd (clk, reset, local_buf_read_addr, buf_read_addr_fwd);
+      register_sync #(1) read_req_fwd (clk, reset, local_buf_read_req, buf_read_req_fwd); //local_buf_read_req to buf_read_req_fwd
+      register_sync #(LOCAL_ADDR_W) read_addr_fwd (clk, reset, local_buf_read_addr, buf_read_addr_fwd);//local_buf_read_addr to buf_read_addr_fwd
 
       if (n == 0) begin
         assign local_buf_read_req = buf_read_req;
@@ -58,7 +64,8 @@ module ibuf #(
         assign local_buf_read_req = LOOP_N[n-1].buf_read_req_fwd;
         assign local_buf_read_addr = LOOP_N[n-1].buf_read_addr_fwd;
       end
-
+      //-------------------------------------------------
+      //write part
       wire [ BUF_ID_W             -1 : 0 ]        local_mem_write_buf_id;
       wire                                        local_mem_write_req;
       wire [ LOCAL_ADDR_W         -1 : 0 ]        local_mem_write_addr;
@@ -67,17 +74,18 @@ module ibuf #(
       wire [ BUF_ID_W             -1 : 0 ]        buf_id;
       assign buf_id = LOCAL_BUF_ID;
 
-      if (BUF_ID_W == 0) begin
+      if (BUF_ID_W == 0) begin//MEM_ADDR_WIDTH = BUF_ADDR_WIDTH + BUF_ID_WIDTH(0)
         assign local_mem_write_addr = mem_write_addr;
         assign local_mem_write_req = mem_write_req;
-        assign local_mem_write_data = mem_write_data[(n%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH];
+        assign local_mem_write_data = mem_write_data[(n%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH]; //TODO: n%GROUP_SIZE ? to make sure n is less than GROUP_SIZE
       end
-      else begin
+      else begin//MEM_ADDR_WIDTH = BUF_ADDR_WIDTH + BUF_ID_WIDTH
         assign {local_mem_write_addr, local_mem_write_buf_id} = mem_write_addr;
         assign local_mem_write_req = mem_write_req && local_mem_write_buf_id == buf_id;
         assign local_mem_write_data = mem_write_data[(n%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH];
       end
 
+      //set of write and read, makes a buffer?
       ram #(
         .ADDR_WIDTH                     ( LOCAL_ADDR_W                   ),
         .DATA_WIDTH                     ( DATA_WIDTH                     ),
