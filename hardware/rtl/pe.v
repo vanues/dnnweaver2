@@ -6,12 +6,12 @@
 
 /*
 module sum: Processor Elements
-perform a*b (+c)
+perform a*b (+c) -> out
 */
 
 `timescale 1ns/1ps
 module pe #(
-  parameter          PE_MODE                      = "FMA", //TODO: FMA ?
+  parameter          PE_MODE                      = "FMA", 
   parameter integer  ACT_WIDTH                    = 16,
   parameter integer  WGT_WIDTH                    = 16,
   parameter integer  MULT_OUT_WIDTH               = ACT_WIDTH + WGT_WIDTH,//multiplication result width
@@ -35,7 +35,7 @@ module pe #(
   
   assign mult_out = _a * _b;//perf a*b
 
-  if (PE_MODE == "FMA") begin
+  if (PE_MODE == "FMA") begin//a*b=c mode
     signed_adder #(//exec mult_out + c => out;
       .REGISTER_OUTPUT                ( "TRUE"                         ),
       .IN1_WIDTH                      ( MULT_OUT_WIDTH                 ),
@@ -49,7 +49,7 @@ module pe #(
       .b                              ( c                              ),
       .out                            ( out                            )
     ); 
-  end else begin//PE_MODE != FMA, only a*b
+  end else begin//MULT mode, only a*b
     wire [ PE_OUT_WIDTH         -1 : 0 ]        alu_out;
     assign alu_out = $signed(mult_out);//TODO: why generate a reg to trans data?
 
