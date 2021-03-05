@@ -3,6 +3,15 @@
 //
 // Hardik Sharma
 // (hsharma@gatech.edu)
+
+/*
+module sum:
+产生ARRAY_M个banked_ram模块，每个模块里有2^TAG_W个banked_mem
+- 当BUF_ID_W==0 时，mem和buf的读和写似乎都同时作用于2个banked_ram（相当于克隆一个ram出来），读和写的结果都一样。
+- 当BUF_ID_W!=0 时，TODO:
+
+根据banked_ram设计，mem_read/write_req优先级是高于buf_~_req的
+*/
 `timescale 1ns/1ps
 module obuf #(
   parameter integer  TAG_W                        = 2,  // Log number of banks
@@ -13,9 +22,9 @@ module obuf #(
 
   parameter integer  GROUP_SIZE                   = MEM_DATA_WIDTH / DATA_WIDTH,
   parameter integer  GROUP_ID_W                   = GROUP_SIZE == 1 ? 0 : $clog2(GROUP_SIZE),
-  parameter integer  BUF_ID_W                     = $clog2(ARRAY_M) - GROUP_ID_W,
+  parameter integer  BUF_ID_W                     = $clog2(ARRAY_M) - GROUP_ID_W,//0
 
-  parameter integer  MEM_ADDR_WIDTH               = BUF_ADDR_WIDTH + BUF_ID_W,
+  parameter integer  MEM_ADDR_WIDTH               = BUF_ADDR_WIDTH + BUF_ID_W,//10 
   parameter integer  BUF_DATA_WIDTH               = ARRAY_M * DATA_WIDTH
 )
 (
@@ -40,13 +49,13 @@ module obuf #(
   );
 
   genvar m;
-  generate
+  generate//生成ARRAY_M个module实例, 地址默认均为10位，数据32位（
     for (m=0; m<ARRAY_M; m=m+1)
     begin: LOOP_M
 
-      localparam integer  LOCAL_ADDR_W                 = BUF_ADDR_WIDTH;
+      localparam integer  LOCAL_ADDR_W                 = BUF_ADDR_WIDTH;//default:10
       localparam integer  LOCAL_BUF_ID                 = m/GROUP_SIZE;
-
+      //buf part
       wire                                        local_buf_write_req;
       wire [ LOCAL_ADDR_W         -1 : 0 ]        local_buf_write_addr;
       wire [ DATA_WIDTH           -1 : 0 ]        local_buf_write_data;
@@ -55,15 +64,16 @@ module obuf #(
       wire [ LOCAL_ADDR_W         -1 : 0 ]        local_buf_read_addr;
       wire [ DATA_WIDTH           -1 : 0 ]        local_buf_read_data;
 
-      assign local_buf_write_data = buf_write_data[(m)*DATA_WIDTH+:DATA_WIDTH];
-      assign buf_read_data[(m)*DATA_WIDTH+:DATA_WIDTH] = local_buf_read_data;
+      assign local_buf_write_data = buf_write_data[(m)*DATA_WIDTH+:DATA_WIDTH];//截取部分对应data到自己module里
+      assign buf_read_data[(m)*DATA_WIDTH+:DATA_WIDTH] = local_buf_read_data;//传出从本module读取的data
 
-      assign local_buf_read_req = buf_read_req;
-      assign local_buf_write_req = buf_write_req;
-      assign local_buf_write_addr = buf_write_addr;
-      assign local_buf_read_addr = buf_read_addr;
-
+      assign local_buf_read_req = buf_read_req;//传入read req 
+      assign local_buf_write_req = buf_write_req;//传入write req
+      assign local_buf_write_addr = buf_write_addr;//传入buf write addr
+      assign local_buf_read_addr = buf_read_addr;//传入buf read addr
+      //mem part, same interface with buf part
       wire [ BUF_ID_W             -1 : 0 ]        local_mem_write_buf_id;
+
       wire                                        local_mem_write_req;
       wire [ LOCAL_ADDR_W         -1 : 0 ]        local_mem_write_addr;
       wire [ DATA_WIDTH           -1 : 0 ]        local_mem_write_data;
@@ -75,7 +85,7 @@ module obuf #(
       wire [ BUF_ID_W             -1 : 0 ]        buf_id;
       assign buf_id = LOCAL_BUF_ID;
 
-      if (BUF_ID_W == 0) begin
+      if (BUF_ID_W == 0) begin//only one 
         assign local_mem_write_addr = mem_write_addr;
         assign local_mem_write_req = mem_write_req;
         assign local_mem_write_data = mem_write_data[(m%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH];

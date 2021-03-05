@@ -6,7 +6,7 @@
 
 `timescale 1ns/1ps
 module systolic_array #(
-    parameter integer  ARRAY_N                      = 4,//NxM
+    parameter integer  ARRAY_N                      = 4,//MxN PEs
     parameter integer  ARRAY_M                      = 4,
     parameter          DTYPE                        = "FXP", // FXP for Fixed-point, FP32 for single precision, FP16 for half-precision
 
@@ -34,7 +34,7 @@ module systolic_array #(
 
     input  wire                                         acc_clear,
 
-    input  wire  [ IBUF_DATA_WIDTH      -1 : 0 ]        ibuf_read_data,
+    input  wire  [ IBUF_DATA_WIDTH      -1 : 0 ]        ibuf_read_data,//input act buffer data
 
     output wire                                         sys_bias_read_req,
     output wire  [ BBUF_ADDR_WIDTH      -1 : 0 ]        sys_bias_read_addr,
@@ -43,7 +43,7 @@ module systolic_array #(
     input  wire  [ BBUF_DATA_WIDTH      -1 : 0 ]        bbuf_read_data,
     input  wire                                         bias_prev_sw,
 
-    input  wire  [ WBUF_DATA_WIDTH      -1 : 0 ]        wbuf_read_data,
+    input  wire  [ WBUF_DATA_WIDTH      -1 : 0 ]        wbuf_read_data,//weight buffer data
     input  wire  [ OUT_WIDTH            -1 : 0 ]        obuf_read_data,
     input  wire  [ OBUF_ADDR_WIDTH      -1 : 0 ]        obuf_read_addr,
     output wire                                         sys_obuf_read_req,
@@ -63,8 +63,8 @@ module systolic_array #(
 //=========================================
 
   //FSM to see if we can accumulate or not
-    reg  [ 2                    -1 : 0 ]        acc_state_d;
-    reg  [ 2                    -1 : 0 ]        acc_state_q;
+    reg  [ 2                    -1 : 0 ]        acc_state_d;//4 states
+    reg  [ 2                    -1 : 0 ]        acc_state_q;//4 states
 
 
     wire [ OUT_WIDTH            -1 : 0 ]        accumulator_out;
@@ -111,17 +111,17 @@ begin: LOOP_OUTPUT_FORWARD
   // Operands are delayed by a cycle when forwarding
   if (m == 0)
   begin
-    assign a = ibuf_read_data[n*ACT_WIDTH+:ACT_WIDTH];
+    assign a = ibuf_read_data[n*ACT_WIDTH+:ACT_WIDTH];//截取从n*ACT_WIDTH开始，长ACT_WIDTH的比特
   end
-  else
+  else//m!=0
   begin
     wire [ ACT_WIDTH            -1 : 0 ]        fwd_a;
-    assign fwd_a = LOOP_INPUT_FORWARD[m-1].LOOP_OUTPUT_FORWARD[n].a;
+    assign fwd_a = LOOP_INPUT_FORWARD[m-1].LOOP_OUTPUT_FORWARD[n].a;//对每个inst都传播a
     // register_sync #(ACT_WIDTH) fwd_a_reg (clk, reset, fwd_a, a);
-    assign a = fwd_a;
+    assign a = fwd_a;//当前的a等于上一轮的a
   end
 
-    assign b = wbuf_read_data[(m+n*ARRAY_M)*WGT_WIDTH+:WGT_WIDTH];
+    assign b = wbuf_read_data[(m+n*ARRAY_M)*WGT_WIDTH+:WGT_WIDTH];//截取从(m+n*ARRAY_M)*WGT_WIDTH开始，长WGT_WIDTH的比特
   //==============================================================
 
   wire [1:0] prev_level_mode = 0;

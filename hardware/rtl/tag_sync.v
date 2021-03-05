@@ -44,7 +44,7 @@ module tag_sync #(
     reg  [ TAG_W                -1 : 0 ]        ldmem_tag_alloc;
     reg  [ TAG_W                -1 : 0 ]        compute_tag_alloc;
     reg  [ TAG_W                -1 : 0 ]        stmem_tag_alloc;
-    reg  [ 2                    -1 : 0 ]        tag0_state_d;
+    reg  [ 2                    -1 : 0 ]        tag0_state_d;//[1:0] 2bits 4status
     reg  [ 2                    -1 : 0 ]        tag0_state_q;
     reg  [ 2                    -1 : 0 ]        tag1_state_d;
     reg  [ 2                    -1 : 0 ]        tag1_state_q;

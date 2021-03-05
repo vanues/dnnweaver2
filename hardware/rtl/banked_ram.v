@@ -10,6 +10,7 @@
 module sum: see mux part:line 183
 */
 `timescale 1ns/1ps
+//`define simulation
 module banked_ram
 #(
     parameter integer  TAG_W                        = 2,//TAG 用来选择bank inst
@@ -28,7 +29,7 @@ module banked_ram
     output wire  [ DATA_WIDTH           -1 : 0 ]        s_read_data_a,//read result
 
     input  wire                                         s_write_req_a,
-    input  wire  [ ADDR_WIDTH           -1 : 0 ]        s_write_addr_a,
+    input  wire  [ ADDR_WIDTH           -1 : 0 ]        s_write_addr_a,//[TAG|LOCAL_ADDR_W] = [INPUT_ADDR]
     input  wire  [ DATA_WIDTH           -1 : 0 ]        s_write_data_a,
 
   // RD/WR 
@@ -124,7 +125,9 @@ generate
     wire                                        local_rd_req_a_dly;
     wire                                        local_rd_req_b_dly;
 
-    // Write port, only one write req is available?
+    // Write port, only one write req is available
+    // 为什么可以做到同时写2个： A：一个BANK_INST模块中，虽然有2个写req和2个读req，但是最多只能做到1读1写，不能做到2读或者2写
+    // 要想实现多读多写，就要根据wr_tag_a来指定不同的BANK_INST模块
     assign local_wr_req_a = (wr_tag_a == i) && s_write_req_a;//tag_a choose BANK_INST[i] and has a write req;
     assign local_wr_req_b = (wr_tag_b == i) && s_write_req_b;//~~
 
@@ -139,7 +142,7 @@ generate
     end
 
 
-    // Read port, 每次最多只有一个req可用？
+    // Read port, 每次最多只有一个req可用
     assign local_rd_req_a = (rd_tag_a == i) && s_read_req_a;//has rd_req and tag is now banked mem
     assign local_rd_req_b = (rd_tag_b == i) && s_read_req_b;//has rd_req and tag is now banked mem
 
@@ -191,7 +194,7 @@ endgenerate
 //最后在4个data中读出其中2个data
 
 //运行过程中，同一个clock最多
-//testbench: 生成4个bank，对bank0和1同时写，同时读bank0，状态正常，这个相当于可以同时做4次（2写2读？）
+//testbench: 生成4个banked_mem 实例，对于每个实例，最多可以做1读1写，所以本模块最多可以做到4（1<<NUM_TAGS）次和4次写，但是结果会从读出的2个64位缩小为2个16位
 //=============================================================
   mux_n_1 #(
     .WIDTH                          ( DATA_WIDTH                     ),
