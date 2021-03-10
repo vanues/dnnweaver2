@@ -26,7 +26,7 @@ module ram
   input  wire [ DATA_WIDTH  -1 : 0 ]  s_write_data//data to write
 );
 
-  reg  [ DATA_WIDTH -1 : 0 ] mem [ 0 : 1<<ADDR_WIDTH ]; // mem array size is 2^ADD_WIDTH, each one has DATA_WIDTH bits
+  reg  [ DATA_WIDTH -1 : 0 ] mem [ 0 : 1<<ADDR_WIDTH ]; // mem array size is 2^ADDR_WIDTH, each one has DATA_WIDTH bits
 
   always @(posedge clk)
   begin: RAM_WRITE

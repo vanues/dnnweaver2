@@ -59,7 +59,7 @@ module systolic_array_testbench(
     reg  [ BBUF_DATA_WIDTH -1 : 0 ] bbuf_read_data;//bias data
     reg  [ OUT_WIDTH -1 : 0 ]       obuf_read_data;
     reg  [ OBUF_ADDR_WIDTH -1 : 0 ] obuf_read_addr;
-    reg  [ OBUF_ADDR_WIDTH -1 : 0 ] obuf_write_addr;
+    wire  [ OBUF_ADDR_WIDTH -1 : 0 ] obuf_write_addr;
     
     //output
     wire  sys_obuf_write_req;
@@ -79,11 +79,10 @@ module systolic_array_testbench(
     initial begin
         ibuf_read_data = {4{16'h1111}};
         wbuf_read_data = {4{ibuf_read_data}};
-        bbuf_read_data = {4{32'h43211234}}; 
+        bbuf_read_data = {4{32'h1111}}; 
         #100;
         reset<=0;
-        obuf_write_req<='d1;
-        //obuf_write_addr <= 'd0;
+        //obuf_write_req<='d1;
         bias_prev_sw <= 'd0;
     end
     

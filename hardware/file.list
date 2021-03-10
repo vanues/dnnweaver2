@@ -20,24 +20,23 @@ TODO:
     rtl/wbuf_mem_wrapper.v
     rtl/bbuf_mem_wrapper.v
     rtl/obuf_mem_wrapper.v
-    rtl/wbuf.v
-    rtl/bbuf.v
 
     rtl/cl_wrapper.v
     rtl/dnnweaver2_controller.v
     rtl/mem_walker_stride.v
     rtl/controller_fsm.v
-    
-
     rtl/axi_master.v
+HALF:
+
+    rtl/tag_sync.v TODO: 意义不明
+READ:
+    rtl/wbuf.v
+
+    rtl/bbuf.v
+    rtl/ibuf.v
     rtl/systolic_array.v
 
 
-
-HALF:
-    rtl/ibuf.v
-    rtl/tag_sync.v TODO: 意义不明
-READ:
     rtl/tag_logic.v
     rtl/obuf.v
 

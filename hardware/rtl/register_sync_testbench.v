@@ -25,13 +25,19 @@ module register_sync_testbench(
     );
     localparam integer WIDTH=8;
     reg clk;
-    wire[WIDTH-1:0] indata,outdata;
+    reg[WIDTH-1:0] indata;
+    wire[WIDTH-1:0] outdata;
     
     initial clk=0;
-    always#100 clk=~clk;
+    always#50 clk=~clk;
     
-    generate
-    assign indata=8'hab;
+    initial begin
+        indata = 8'b0;
+       repeat(5)begin
+            indata = indata + 1'b1; 
+            #100; 
+       end
+    end
     
     register_sync#(WIDTH) rs_0(
         .clk(clk),
@@ -40,6 +46,6 @@ module register_sync_testbench(
         .out(outdata)
     );
     
-    endgenerate
+
     
 endmodule

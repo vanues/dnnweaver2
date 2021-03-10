@@ -6,7 +6,15 @@
 
 /*
 module sum:
-先Systolic Array - Begin做a*b，最后在accumulator处统一做+c
+先Systolic Array - Begin做a*b,一行结果累加起来
+计算维度类似于
+{l,m,n} + {a b c |d e f |g h i} * {p q r}
+//结果:
+//line1: a*p+b*q+c*r + l
+//line2: d*p+m*q+f*r + m
+//line3: g*p+h*q+i*r + n
+
+最后在accumulator处,可以算出3行总和{l1,l1+l2,l1+l2+l3格式},也可以算每行+c(bias){l1+c1,l2+c2,l3+c3}
 */
 `timescale 1ns/1ps
 module systolic_array #(
@@ -14,19 +22,19 @@ module systolic_array #(
     parameter integer  ARRAY_M                      = 4,
     parameter          DTYPE                        = "FXP", // FXP for Fixed-point, FP32 for single precision, FP16 for half-precision
 
-    parameter integer  ACT_WIDTH                    = 16,
-    parameter integer  WGT_WIDTH                    = 16,
+    parameter integer  ACT_WIDTH                    = 16,//操作数
+    parameter integer  WGT_WIDTH                    = 16,//权重
     parameter integer  BIAS_WIDTH                   = 32,
     parameter integer  ACC_WIDTH                    = 48,//累加位宽，why 48（因为buf width是48吗）
 
     // General
-    parameter integer  MULT_OUT_WIDTH               = ACT_WIDTH + WGT_WIDTH,//d:32
-    parameter integer  PE_OUT_WIDTH                 = MULT_OUT_WIDTH + $clog2(ARRAY_N),//32+16=48,TODO:为什么还要加一个clog
+    parameter integer  MULT_OUT_WIDTH               = ACT_WIDTH + WGT_WIDTH,//乘法位宽 d:32
+    parameter integer  PE_OUT_WIDTH                 = MULT_OUT_WIDTH + $clog2(ARRAY_N),//PE输出位宽 32+16=48==ACC
     
     parameter integer  SYSTOLIC_OUT_WIDTH           = ARRAY_M * ACC_WIDTH,//用来存储每行最后一个PE的计算结果（宽ACC_WIDTH)，一共ARRAY_M行
-    parameter integer  IBUF_DATA_WIDTH              = ARRAY_N * ACT_WIDTH,
-    parameter integer  WBUF_DATA_WIDTH              = ARRAY_N * ARRAY_M * WGT_WIDTH,
-    parameter integer  OUT_WIDTH                    = ARRAY_M * ACC_WIDTH,
+    parameter integer  IBUF_DATA_WIDTH              = ARRAY_N * ACT_WIDTH,//行数 * 
+    parameter integer  WBUF_DATA_WIDTH              = ARRAY_N * ARRAY_M * WGT_WIDTH,//每个PE都要有weight
+    parameter integer  OUT_WIDTH                    = ARRAY_M * ACC_WIDTH,//最终输出width，行数*ACCW
     parameter integer  BBUF_DATA_WIDTH              = ARRAY_M * BIAS_WIDTH,//4*32
 
     // Address for buffers
@@ -36,27 +44,31 @@ module systolic_array #(
     input  wire                                         clk,
     input  wire                                         reset,
 
-    input  wire                                         acc_clear,
+    input  wire                                         acc_clear,//置acc_state_q为invalid
 
-    input  wire  [ IBUF_DATA_WIDTH      -1 : 0 ]        ibuf_read_data,//input act buffer data
+    input  wire  [ IBUF_DATA_WIDTH      -1 : 0 ]        ibuf_read_data,//输入操作数
 
-    output wire                                         sys_bias_read_req,
-    output wire  [ BBUF_ADDR_WIDTH      -1 : 0 ]        sys_bias_read_addr,
-    input  wire                                         bias_read_req,
+    //bias part
+    output wire                                         sys_bias_read_req,//输出读bias请求 (是不是SA外有MEM闭环)
+    output wire  [ BBUF_ADDR_WIDTH      -1 : 0 ]        sys_bias_read_addr,//output 读bias地址
+
+    input  wire                                         bias_read_req,//输入读bias请求
     input  wire  [ BBUF_ADDR_WIDTH      -1 : 0 ]        bias_read_addr,
     input  wire  [ BBUF_DATA_WIDTH      -1 : 0 ]        bbuf_read_data,//bias data
     input  wire                                         bias_prev_sw,
 
-    input  wire  [ WBUF_DATA_WIDTH      -1 : 0 ]        wbuf_read_data,//weight buffer data
+    input  wire  [ WBUF_DATA_WIDTH      -1 : 0 ]        wbuf_read_data,//权重数据
     input  wire  [ OUT_WIDTH            -1 : 0 ]        obuf_read_data,
     input  wire  [ OBUF_ADDR_WIDTH      -1 : 0 ]        obuf_read_addr,
-    output wire                                         sys_obuf_read_req,
+    output wire                                         sys_obuf_read_req,//输出obuf 读请求
     output wire  [ OBUF_ADDR_WIDTH      -1 : 0 ]        sys_obuf_read_addr,
     input  wire                                         obuf_write_req,
-    output wire  [ OUT_WIDTH            -1 : 0 ]        obuf_write_data,//总计算结果
+
     input  wire  [ OBUF_ADDR_WIDTH      -1 : 0 ]        obuf_write_addr,
-    output wire                                         sys_obuf_write_req,
-    output wire  [ OBUF_ADDR_WIDTH      -1 : 0 ]        sys_obuf_write_addr
+    //写计算结果part,数据,地址,请求
+    output wire  [ OUT_WIDTH            -1 : 0 ]        obuf_write_data,//总计算结果
+    output wire                                         sys_obuf_write_req,//外写obuf
+    output wire  [ OBUF_ADDR_WIDTH      -1 : 0 ]        sys_obuf_write_addr//外协obuf
 );
 
 //=========================================
@@ -72,28 +84,28 @@ module systolic_array #(
 
 
     wire [ OUT_WIDTH            -1 : 0 ]        accumulator_out;//累加结果
-    wire                                        acc_out_valid;
+    wire                                        acc_out_valid;//systolic_out_valid[0] dly赋值而来
     wire [ ARRAY_M              -1 : 0 ]        acc_out_valid_;
-    wire                                        acc_out_valid_all;
-    wire [ SYSTOLIC_OUT_WIDTH   -1 : 0 ]        systolic_out;
+    wire                                        acc_out_valid_all;//应该叫valid_any
+    wire [ SYSTOLIC_OUT_WIDTH   -1 : 0 ]        systolic_out;//临时存放每行PE的计算结果
 
-    wire [ ARRAY_M              -1 : 0 ]        systolic_out_valid;
-    wire [ ARRAY_N              -1 : 0 ]        _systolic_out_valid;
+    wire [ ARRAY_M              -1 : 0 ]        systolic_out_valid;//传播给output sys_obuf_read_req
+    wire [ ARRAY_N              -1 : 0 ]        _systolic_out_valid;//obuf_write_req 激活
 
-    wire [ OBUF_ADDR_WIDTH      -1 : 0 ]        systolic_out_addr;
-    wire [ OBUF_ADDR_WIDTH      -1 : 0 ]        _systolic_out_addr;
+    wire [ OBUF_ADDR_WIDTH      -1 : 0 ]        systolic_out_addr;//NEVER USED
+    wire [ OBUF_ADDR_WIDTH      -1 : 0 ]        _systolic_out_addr;//obuf_write_addr赋值而来
 
     wire                                        _addr_eq;//前后两次地址相等
-    reg                                         addr_eq;
+    reg                                         addr_eq;//存wire _addr_eq的寄存器
     wire [ ARRAY_N              -1 : 0 ]        _acc;
     wire [ ARRAY_M              -1 : 0 ]        acc;//累加器使能
-    wire [ OBUF_ADDR_WIDTH      -1 : 0 ]        _systolic_in_addr;
+    wire [ OBUF_ADDR_WIDTH      -1 : 0 ]        _systolic_in_addr;//obuf_read_addr赋值
 
-    wire [ BBUF_ADDR_WIDTH      -1 : 0 ]        _bias_read_addr;
-    wire                                        _bias_read_req;
+    wire [ BBUF_ADDR_WIDTH      -1 : 0 ]        _bias_read_addr;//输入赋值 临时变量
+    wire                                        _bias_read_req;//输入赋值 临时变量
 
-    wire [ ARRAY_M              -1 : 0 ]        systolic_acc_clear;
-    wire [ ARRAY_M              -1 : 0 ]        _systolic_acc_clear;
+    wire [ ARRAY_M              -1 : 0 ]        systolic_acc_clear;//NEVER used
+    wire [ ARRAY_M              -1 : 0 ]        _systolic_acc_clear;//NEVER used
 //=========================================
 // Systolic Array - Begin
 //=========================================
@@ -109,34 +121,42 @@ begin: LOOP_OUTPUT_FORWARD
     wire [ WGT_WIDTH            -1 : 0 ]        b;       // Input Operand b
     wire [ PE_OUT_WIDTH         -1 : 0 ]        pe_out;  // Output of signed spatial multiplier
     wire [ PE_OUT_WIDTH         -1 : 0 ]        c;       // Output  of mac
-
   //==============================================================
   // Operands for the parametric PE
   // Operands are delayed by a cycle when forwarding
-  if (m == 0)
+  // [ ibuf read data]
+  //  a1  a2  a3  a4
+  //  PE  PE  PE  PE
+  //  |   |   |   |
+  //  PE  PE  PE  PE 
+  //  ....
+  //  PE  PE  PE  PE
+
+  if (m == 0)//第一行PEs的操作数来自ibuf
   begin
-    assign a = ibuf_read_data[n*ACT_WIDTH+:ACT_WIDTH];//截取从n*ACT_WIDTH开始，长ACT_WIDTH的比特
+    assign a = ibuf_read_data[n*ACT_WIDTH+:ACT_WIDTH];//截取从n*ACT_WIDTH开始，长ACT_WIDTH的数据
   end
-  else//m!=0
+  else//m!=0，余下行PEs的操作数分别来自其上一行对应的PE
   begin
     wire [ ACT_WIDTH            -1 : 0 ]        fwd_a;
     assign fwd_a = LOOP_INPUT_FORWARD[m-1].LOOP_OUTPUT_FORWARD[n].a;//对每个inst都传播a
     // register_sync #(ACT_WIDTH) fwd_a_reg (clk, reset, fwd_a, a);
-    assign a = fwd_a;//当前的a等于上一轮的a
+    assign a = fwd_a;//当前的a等于上一轮的a,意味着整个ibuf a只有array_n个数值,这是一维A乘二维B?
   end
 
     assign b = wbuf_read_data[(m+n*ARRAY_M)*WGT_WIDTH+:WGT_WIDTH];//截取从(m+n*ARRAY_M)*WGT_WIDTH开始，长WGT_WIDTH的比特
+    //b的这种m+n*ARRAY_M索引方式，产生的计算顺序就是a一行乘b的一列（正常矩阵计算方法）
   //==============================================================
 
-  wire [1:0] prev_level_mode = 0;
+  wire [1:0] prev_level_mode = 0;//NEVER used
 
     localparam          PE_MODE                      = n == 0 ? "MULT" : "FMA";
 
   // output forwarding
-  if (n == 0)//等于0时，PE_MODE 为MULTI，这里的C没有参与运算
+  if (n == 0)//等于0时,PE里没有上轮运算结果，PE_MODE 为MULTI,不需要加法,这里的C没有参与运算
     assign c = {PE_OUT_WIDTH{1'bz}};
   else//n!=0 PE_MODE == FMA (a*b+c)
-    assign c = LOOP_INPUT_FORWARD[m].LOOP_OUTPUT_FORWARD[n-1].pe_out;//C是上一个PE的a*b计算结果
+    assign c = LOOP_INPUT_FORWARD[m].LOOP_OUTPUT_FORWARD[n-1].pe_out;//C是左边PE的a*b计算结果
 
   pe #(
     .PE_MODE                        ( PE_MODE                        ),
@@ -151,9 +171,8 @@ begin: LOOP_OUTPUT_FORWARD
     .c                              ( c                              ),  // input
     .out                            ( pe_out                         )   // output // pe_out = a * b + c
     );
-
-  if (n == ARRAY_N - 1)//每行最后的PE就是结果
-  begin
+  if (n == ARRAY_N - 1)//每行最后的PE就是累加的结果
+  begin//FIXME:结果1/2不正确
     assign systolic_out[m*PE_OUT_WIDTH+:PE_OUT_WIDTH] = pe_out;//存储每行的计算结果PE_OUT,4*48 - 56(Z) = 4*32
   end
 
@@ -175,16 +194,17 @@ endgenerate
 
     reg  [ OBUF_ADDR_WIDTH      -1 : 0 ]        prev_obuf_write_addr;
 
+  //obuf_write delay logic
   always @(posedge clk)
   begin
     if (obuf_write_req)
       prev_obuf_write_addr <= obuf_write_addr;//赋予旧地址
   end
-    //acc_status_q 状态
+    //acc_status_q 状态list
     localparam integer  ACC_INVALID                  = 0;
     localparam integer  ACC_VALID                    = 1;
 
-  // If the current read address and the previous write address are the same, accumulate
+  // If the current read address and the previous write address are the same, accumulate FIXME:
     assign _addr_eq = (obuf_write_addr == prev_obuf_write_addr) && (obuf_write_req) && (acc_state_q != ACC_INVALID);//acc_state改变导致addr_eq再也回不去0，进而导致local_acc x
     wire acc_clear_dly1;
   register_sync #(1) acc_clear_dlyreg (clk, reset, acc_clear, acc_clear_dly1);
@@ -201,22 +221,22 @@ endgenerate
   begin
     acc_state_d = acc_state_q;
     case (acc_state_q)
-      ACC_INVALID: begin
+      ACC_INVALID: begin//如果在invalid情况下，得到了一个obuf_write_req，会置state为valid
         if (obuf_write_req)
           acc_state_d = ACC_VALID;
       end
-      ACC_VALID: begin
+      ACC_VALID: begin//如果在valid情况下，得到了一个acc_clear，会置state为invalid
         if (acc_clear_dly1)
           acc_state_d = ACC_INVALID;
       end
     endcase
   end
 
-  //acc_state_q trans
+  //acc_state reg trans 
   always @(posedge clk)
   begin
     if (reset)
-      acc_state_q <= ACC_INVALID;
+      acc_state_q <= ACC_INVALID;//初始值
     else
       acc_state_q <= acc_state_d;
   end
@@ -235,13 +255,13 @@ endgenerate
   generate
     for (i=1; i<ARRAY_N; i=i+1)
     begin: COL_ACC
-      register_sync #(1) out_valid_delay (clk, reset, _acc[i-1], _acc[i]);//有延迟的传播
+      register_sync #(1) out_valid_delay (clk, reset, _acc[i-1], _acc[i]);//_acc有延迟的传播
     end
 
     for (i=1; i<ARRAY_M; i=i+1)
     begin: ROW_ACC
       // register_sync #(1) out_valid_delay (clk, reset, acc[i-1], acc[i]);
-    assign acc[i] = acc[i-1];//无延迟传播
+    assign acc[i] = acc[i-1];//acc无延迟传播
     end
 
   endgenerate
@@ -251,11 +271,11 @@ endgenerate
 
   generate
     for (i=1; i<ARRAY_N; i=i+1)
-    begin: COL_VALID_OUT
+    begin: COL_VALID_OUT//行输出valid
       register_sync #(1) out_valid_delay (clk, reset, _systolic_out_valid[i-1], _systolic_out_valid[i]);//延迟传播
     end
     for (i=1; i<ARRAY_M; i=i+1)
-    begin: ROW_VALID_OUT
+    begin: ROW_VALID_OUT//列输出valid
       register_sync #(1) out_valid_delay (clk, reset, systolic_out_valid[i-1], systolic_out_valid[i]);
     end
   endgenerate
@@ -332,12 +352,12 @@ endgenerate
   // assign sys_obuf_write_req = acc_out_valid;
 
     assign acc_out_valid_[0] = acc_out_valid && ~addr_eq;
-    assign acc_out_valid_all = |acc_out_valid_;
+    assign acc_out_valid_all = |acc_out_valid_;//TODO: 这里为什么不写成acc_out_valid_[0],因为后几位也是[0]延迟传播来的
 
 generate
 for (i=1; i<ARRAY_M; i=i+1)
 begin: OBUF_VALID_OUT
-      register_sync #(1) obuf_output_delay (clk, reset, acc_out_valid_[i-1], acc_out_valid_[i]);
+      register_sync #(1) obuf_output_delay (clk, reset, acc_out_valid_[i-1], acc_out_valid_[i]);//delay传播
 end
 endgenerate
 

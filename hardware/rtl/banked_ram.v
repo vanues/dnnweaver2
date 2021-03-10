@@ -8,6 +8,7 @@
 
 /*
 module sum: see mux part:line 183
+read_req_a和read_req_b只能被激活一个
 */
 `timescale 1ns/1ps
 //`define simulation
@@ -26,7 +27,7 @@ module banked_ram
   // LD/ST --Load / Store
     input  wire                                         s_read_req_a,
     input  wire  [ ADDR_WIDTH           -1 : 0 ]        s_read_addr_a,
-    output wire  [ DATA_WIDTH           -1 : 0 ]        s_read_data_a,//read result
+    output wire  [ DATA_WIDTH           -1 : 0 ]        s_read_data_a,//output
 
     input  wire                                         s_write_req_a,
     input  wire  [ ADDR_WIDTH           -1 : 0 ]        s_write_addr_a,//[TAG|LOCAL_ADDR_W] = [INPUT_ADDR]
@@ -35,7 +36,7 @@ module banked_ram
   // RD/WR 
     input  wire                                         s_read_req_b,
     input  wire  [ ADDR_WIDTH           -1 : 0 ]        s_read_addr_b,
-    output wire  [ DATA_WIDTH           -1 : 0 ]        s_read_data_b,//read result
+    output wire  [ DATA_WIDTH           -1 : 0 ]        s_read_data_b,//output
 
     input  wire                                         s_write_req_b,
     input  wire  [ ADDR_WIDTH           -1 : 0 ]        s_write_addr_b,

@@ -8,6 +8,7 @@
 module sum:
   wire(int)-reg-wire(out)
   a register with sync;
+功能,用于做delay时序赋值(只能delay半个周期,即一个下降沿或者上升沿),或者存储数据
 */
 
 `timescale 1ns/1ps

@@ -15,20 +15,20 @@ module bbuf #(
   parameter integer  GROUP_ID_W                   = GROUP_SIZE == 1 ? 0 : $clog2(GROUP_SIZE),
   parameter integer  BUF_ID_W                     = $clog2(ARRAY_M) - GROUP_ID_W,
 
-  parameter integer  MEM_ADDR_WIDTH               = BUF_ADDR_WIDTH + BUF_ID_W,
+  parameter integer  MEM_ADDR_WIDTH               = BUF_ADDR_WIDTH + BUF_ID_W,//地址组成
   parameter integer  BUF_DATA_WIDTH               = ARRAY_M * DATA_WIDTH
 )
 (
   input  wire                                         clk,
   input  wire                                         reset,
-
+  //写 part
   input  wire                                         mem_write_req,
   input  wire  [ MEM_ADDR_WIDTH       -1 : 0 ]        mem_write_addr,
   input  wire  [ MEM_DATA_WIDTH       -1 : 0 ]        mem_write_data,
-
+  //读 part
   input  wire                                         buf_read_req,
   input  wire  [ BUF_ADDR_WIDTH       -1 : 0 ]        buf_read_addr,
-  output wire  [ BUF_DATA_WIDTH       -1 : 0 ]        buf_read_data
+  output wire  [ BUF_DATA_WIDTH       -1 : 0 ]        buf_read_data//output
 );
 
   genvar m;
@@ -37,34 +37,34 @@ module bbuf #(
     begin: LOOP_N
 
       localparam integer  LOCAL_ADDR_W                 = BUF_ADDR_WIDTH;
-      localparam integer  LOCAL_BUF_ID                 = m/GROUP_SIZE;
-
+      localparam integer  LOCAL_BUF_ID                 = m/GROUP_SIZE;//自有固定id
+      //读 part
       wire                                        local_buf_read_req;
       wire [ LOCAL_ADDR_W         -1 : 0 ]        local_buf_read_addr;
       wire [ DATA_WIDTH           -1 : 0 ]        local_buf_read_data;
 
-      assign buf_read_data[(m)*DATA_WIDTH+:DATA_WIDTH] = local_buf_read_data;
+      assign buf_read_data[(m)*DATA_WIDTH+:DATA_WIDTH] = local_buf_read_data;//收集各个INST的读data
 
-      assign local_buf_read_req = buf_read_req;
-      assign local_buf_read_addr = buf_read_addr;
-
+      assign local_buf_read_req = buf_read_req;//input的读req直接赋值给所有LOOP_N INST
+      assign local_buf_read_addr = buf_read_addr;//input的读addr直接赋值给所有LOOP_N INST
+      //写 part
       wire [ BUF_ID_W             -1 : 0 ]        local_mem_write_buf_id;
       wire                                        local_mem_write_req;
       wire [ LOCAL_ADDR_W         -1 : 0 ]        local_mem_write_addr;
       wire [ DATA_WIDTH           -1 : 0 ]        local_mem_write_data;
 
       wire [ BUF_ID_W             -1 : 0 ]        buf_id;
-      assign buf_id = LOCAL_BUF_ID;
+      assign buf_id = LOCAL_BUF_ID;//自有id赋值
 
-      if (BUF_ID_W == 0) begin
+      if (BUF_ID_W == 0) begin//只有一个BUF,不需要让出地址位做选择
         assign local_mem_write_addr = mem_write_addr;
         assign local_mem_write_req = mem_write_req;
-        assign local_mem_write_data = mem_write_data[(m%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH];
+        assign local_mem_write_data = mem_write_data[(m%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH];//提取待写data
       end
       else begin
-        assign {local_mem_write_addr, local_mem_write_buf_id} = mem_write_addr;
+        assign {local_mem_write_addr, local_mem_write_buf_id} = mem_write_addr;//分割写地址和buf id
         assign local_mem_write_req = mem_write_req && local_mem_write_buf_id == buf_id;
-        assign local_mem_write_data = mem_write_data[(m%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH];
+        assign local_mem_write_data = mem_write_data[(m%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH];//提取待写data
       end
 
       ram #(

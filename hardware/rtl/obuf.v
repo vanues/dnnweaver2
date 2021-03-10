@@ -6,26 +6,29 @@
 
 /*
 module sum:
-产生ARRAY_M个banked_ram模块，每个模块里有2^TAG_W个banked_mem
+根据banked_ram设计，mem_read/write_req优先级是高于buf_~_req的
+
+产生ARRAY_M个banked_ram模块，每个Ram模块里有2^TAG_W个banked_mem
 - 当BUF_ID_W==0 时，mem和buf的读和写似乎都同时作用于2个banked_ram（相当于克隆一个ram出来），读和写的结果都一样。
 - 当BUF_ID_W!=0 时，TODO:
 
-根据banked_ram设计，mem_read/write_req优先级是高于buf_~_req的
+读,写:
+  会生成ARRAY_M个RAM,读和写都有一个buf id进行选择,最多只能读1写1
 */
 `timescale 1ns/1ps
 module obuf #(
-  parameter integer  TAG_W                        = 2,  // Log number of banks
+  parameter integer  TAG_W                        = 2,// Log number of banks
   parameter integer  MEM_DATA_WIDTH               = 64,
-  parameter integer  ARRAY_M                      = 2,//有ARRAY_M个banked_ram模块
-  parameter integer  DATA_WIDTH                   = 32,
+  parameter integer  ARRAY_M                      = 4,//有ARRAY_M个banked_ram模块 d:2
+  parameter integer  DATA_WIDTH                   = 64,//d:32
   parameter integer  BUF_ADDR_WIDTH               = 10,
 
-  parameter integer  GROUP_SIZE                   = MEM_DATA_WIDTH / DATA_WIDTH,
-  parameter integer  GROUP_ID_W                   = GROUP_SIZE == 1 ? 0 : $clog2(GROUP_SIZE),
-  parameter integer  BUF_ID_W                     = $clog2(ARRAY_M) - GROUP_ID_W,//0
+  parameter integer  GROUP_SIZE                   = MEM_DATA_WIDTH / DATA_WIDTH,//d:2
+  parameter integer  GROUP_ID_W                   = GROUP_SIZE == 1 ? 0 : $clog2(GROUP_SIZE),//d:2
+  parameter integer  BUF_ID_W                     = $clog2(ARRAY_M) - GROUP_ID_W,//d:2-2=0
 
-  parameter integer  MEM_ADDR_WIDTH               = BUF_ADDR_WIDTH + BUF_ID_W,//10 
-  parameter integer  BUF_DATA_WIDTH               = ARRAY_M * DATA_WIDTH
+  parameter integer  MEM_ADDR_WIDTH               = BUF_ADDR_WIDTH + BUF_ID_W,//d:10+0=10
+  parameter integer  BUF_DATA_WIDTH               = ARRAY_M * DATA_WIDTH//d:2*32=64
 )
 (
   input  wire                                         clk,
@@ -49,7 +52,7 @@ module obuf #(
   );
 
   genvar m;
-  generate//生成ARRAY_M个module实例, 地址默认均为10位，数据32位（
+  generate//生成ARRAY_M个module实例, 地址默认均为10位，数据32位,最后的数据ARRAY_M*32(DATA_WIDTH) 位
     for (m=0; m<ARRAY_M; m=m+1)
     begin: LOOP_M
 
@@ -88,26 +91,26 @@ module obuf #(
       if (BUF_ID_W == 0) begin//only one 
         assign local_mem_write_addr = mem_write_addr;
         assign local_mem_write_req = mem_write_req;
-        assign local_mem_write_data = mem_write_data[(m%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH];
+        assign local_mem_write_data = mem_write_data[(m%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH];//提取待写data
 
         assign local_mem_read_addr = mem_read_addr;
         assign local_mem_read_req = mem_read_req;
-        assign mem_read_data[(m%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH] = local_mem_read_data;
+        assign mem_read_data[(m%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH] = local_mem_read_data;//收集读data
       end
       else begin
         wire [ BUF_ID_W             -1 : 0 ]        local_mem_read_buf_id;
-        reg  [ BUF_ID_W             -1 : 0 ]        local_mem_read_buf_id_dly;
+        reg  [ BUF_ID_W             -1 : 0 ]        local_mem_read_buf_id_dly;//NEVER used
 
-        assign {local_mem_write_addr, local_mem_write_buf_id} = mem_write_addr;
-        assign local_mem_write_req = mem_write_req && local_mem_write_buf_id == buf_id;
-        assign local_mem_write_data = mem_write_data[(m%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH];
+        assign {local_mem_write_addr, local_mem_write_buf_id} = mem_write_addr;//分配local地址和id
+        assign local_mem_write_req = mem_write_req && local_mem_write_buf_id == buf_id;//如果选择的地址id和自有id一致,激活当前的mem写req
+        assign local_mem_write_data = mem_write_data[(m%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH];//截取待写data数据
 
-        assign {local_mem_read_addr, local_mem_read_buf_id} = mem_read_addr;
-        assign local_mem_read_req = mem_read_req && local_mem_read_buf_id == buf_id;
-        assign mem_read_data[(m%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH] = local_mem_read_buf_id_dly == buf_id ? local_mem_read_data : 'bz;
+        assign {local_mem_read_addr, local_mem_read_buf_id} = mem_read_addr;//分配local读地址和读id
+        assign local_mem_read_req = mem_read_req && local_mem_read_buf_id == buf_id;////如果选择的地址id和自有id一致,激活当前的mem读req
+        assign mem_read_data[(m%GROUP_SIZE)*DATA_WIDTH+:DATA_WIDTH] = local_mem_read_buf_id_dly == buf_id ? local_mem_read_data : 'bz;//如果是当前id,存入读取的data,否则存入z
 
         // register_sync#(BUF_ID_W) id_dly (clk, reset, local_mem_read_buf_id, local_mem_read_buf_id_dly);
-
+        //无用块,dly
         always @(posedge clk)
         begin
           if (reset)
@@ -115,7 +118,7 @@ module obuf #(
           else if (mem_read_req)
             local_mem_read_buf_id_dly <= local_mem_read_buf_id;
         end
-
+        //无用块end
       end
       //每个banked_ram里有2^TAG_W 个banked_mem
       banked_ram #(

@@ -4,6 +4,10 @@
 // Hardik Sharma
 // (hsharma@gatech.edu)
 
+/*
+Address generators?
+*/
+
 `timescale 1ns/1ps
 module mem_walker_stride #(
   // Internal Parameters
@@ -16,33 +20,35 @@ module mem_walker_stride #(
   // From loop controller
   input  wire  [ ADDR_WIDTH           -1 : 0 ]        base_addr,
   input  wire                                         loop_ctrl_done,
-  input  wire  [ LOOP_ID_W            -1 : 0 ]        loop_index,
+  input  wire  [ LOOP_ID_W            -1 : 0 ]        loop_index,//与两个buf的读有关
   input  wire                                         loop_index_valid,
   input  wire                                         loop_init,
   input  wire                                         loop_enter,
   input  wire                                         loop_exit,
   // Address offset - from instruction decoder
-  input  wire                                         cfg_addr_stride_v,
-  input  wire  [ ADDR_STRIDE_W        -1 : 0 ]        cfg_addr_stride,
-  output wire  [ ADDR_WIDTH           -1 : 0 ]        addr_out,
-  output wire                                         addr_out_valid
+  input  wire                                         cfg_addr_stride_v,//与两个buf的写有关
+  input  wire  [ ADDR_STRIDE_W        -1 : 0 ]        cfg_addr_stride,//待写地址data
+  output wire  [ ADDR_WIDTH           -1 : 0 ]        addr_out,//output
+  output wire                                         addr_out_valid//output
 );
 
 //=============================================================
 // Wires/Regs
 //=============================================================
+
+//stride write part
   reg  [ LOOP_ID_W            -1 : 0 ]        addr_stride_wr_ptr;
   wire                                        addr_stride_wr_req;
   wire [ ADDR_STRIDE_W        -1 : 0 ]        addr_stride_wr_data;
-
+//stride read part
   wire [ LOOP_ID_W            -1 : 0 ]        addr_stride_rd_ptr;
   wire                                        addr_stride_rd_req;
   wire [ ADDR_STRIDE_W        -1 : 0 ]        addr_stride_rd_data;
-
+//offset write part
   wire [ LOOP_ID_W            -1 : 0 ]        addr_offset_wr_ptr;
   wire                                        addr_offset_wr_req;
   wire [ ADDR_WIDTH           -1 : 0 ]        addr_offset_wr_data;
-
+//offset read part
   wire [ LOOP_ID_W            -1 : 0 ]        addr_offset_rd_ptr;
   wire                                        addr_offset_rd_req;
   wire [ ADDR_WIDTH           -1 : 0 ]        addr_offset_rd_data;
@@ -69,13 +75,13 @@ module mem_walker_stride #(
     else begin
       if (cfg_addr_stride_v)
         addr_stride_wr_ptr <= addr_stride_wr_ptr + 1'b1;
-      else if (loop_ctrl_done)
+      else if (loop_ctrl_done)//cfg_addr_stride_v==0 && loop_ctrl_done==1
         addr_stride_wr_ptr <= 'b0;
     end
   end
 
   assign addr_stride_wr_req = cfg_addr_stride_v;
-  assign addr_stride_wr_data = cfg_addr_stride;
+  assign addr_stride_wr_data = cfg_addr_stride;//stride 写data
 
   assign addr_stride_rd_ptr = loop_index;
   assign addr_stride_rd_req = loop_index_valid || loop_enter;
@@ -101,13 +107,16 @@ module mem_walker_stride #(
 // Offset buffer
 //    This module stores the current offset
 //=============================================================
+
+//如果cfg_addr_stride_v 为0,则offset_wr_ptr 值一直为loop_index, 且ptr对应的写data 固定为0
+//最后ram读出来的data 也固定为0 TODO:不一定
   assign addr_offset_wr_ptr = cfg_addr_stride_v ? addr_stride_wr_ptr : loop_index;
   assign addr_offset_wr_req = (cfg_addr_stride_v || loop_enter || loop_index_valid);
   assign addr_offset_wr_data = cfg_addr_stride_v ? 'b0 : offset_updated;
   assign prev_addr = loop_init ? base_addr : (loop_enter && loop_enter_q) ? addr_out : addr_offset_rd_data;
   assign offset_updated = prev_addr + addr_stride_rd_data;
 
-  assign addr_offset_rd_ptr = loop_index;
+  assign addr_offset_rd_ptr = loop_index;//读offset为index
   assign addr_offset_rd_req = loop_index_valid || loop_enter;
 
   ram #(
@@ -131,7 +140,7 @@ module mem_walker_stride #(
 // Output address stride logic
 //=============================================================
 
-  assign _addr_out_valid = loop_index_valid;
+  assign _addr_out_valid = loop_index_valid;//index 有效则输出addr有效
 
   always @(posedge clk)
   begin
@@ -145,16 +154,16 @@ module mem_walker_stride #(
   begin
     if (reset)
       _addr_out <= 0;
-    else if (loop_init)
+    else if (loop_init)//loop初始化,给初始值
       _addr_out <= base_addr;
-    else if (loop_enter && !loop_enter_q)
-      _addr_out <= addr_offset_rd_data;
+    else if (loop_enter && !loop_enter_q)//此时147行的clk还没来(第一个非reset clk)
+      _addr_out <= addr_offset_rd_data;//addr_offset_rd_data通过ram传过来的时候,是不需要clk的,所以可以直接给值
     else if (loop_index_valid)
       _addr_out <= _addr_out + addr_stride_rd_data;
   end
 
   assign addr_out_valid = _addr_out_valid;
-  assign addr_out = _addr_out;
+  assign addr_out = _addr_out;//输出addr out
 //=============================================================
 
 
