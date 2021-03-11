@@ -23,13 +23,15 @@ TODO:
 
     rtl/cl_wrapper.v
     rtl/dnnweaver2_controller.v
-    rtl/mem_walker_stride.v
+
     rtl/controller_fsm.v
     rtl/axi_master.v
 HALF:
 
     rtl/tag_sync.v TODO: 意义不明
 READ:
+    rtl/mem_walker_stride.v
+
     rtl/wbuf.v
 
     rtl/bbuf.v

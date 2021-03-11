@@ -60,6 +60,7 @@ module mem_walker_stride_testbench();
         #CLK_P;
         forever begin
             loop_index <= loop_index +1'b1;
+            cfg_addr_stride <= cfg_addr_stride + 2'b10;
             #CLK_P;
         end
     end
@@ -82,7 +83,14 @@ module mem_walker_stride_testbench();
         #CLK_P;
         
         #CLK_P;
-        loop_enter <= 1;
+        loop_enter <= 0;
+        cfg_addr_stride_v <= 1;
+        
+        #CLK_P;
+        #CLK_P;
+        #CLK_P;
+        //cfg_addr_stride_v <= 0;
+        //loop_ctrl_done <= 1;
     end
     
 endmodule

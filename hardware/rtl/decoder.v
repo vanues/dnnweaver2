@@ -23,7 +23,7 @@ module decoder #(
     input  wire                                         clk,
     input  wire                                         reset,
   // Instruction memory
-    input  wire  [ INST_W               -1 : 0 ]        imem_read_data,
+    input  wire  [ INST_W               -1 : 0 ]        imem_read_data,//result is instructions data?
     output wire  [ IMEM_ADDR_W          -1 : 0 ]        imem_read_addr,
     output wire                                         imem_read_req,
   // Handshake
