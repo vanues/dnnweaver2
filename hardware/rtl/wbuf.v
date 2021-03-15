@@ -45,7 +45,7 @@ module wbuf #(
 
     input  wire                                         buf_read_req,
     input  wire  [ BUF_ADDR_WIDTH       -1 : 0 ]        buf_read_addr,
-    output wire  [ BUF_DATA_WIDTH       -1 : 0 ]        buf_read_data
+    output wire  [ BUF_DATA_WIDTH       -1 : 0 ]        buf_read_data//output
   );
 
 genvar n, m;

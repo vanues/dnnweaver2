@@ -69,9 +69,9 @@ module wbuf_mem_wrapper #(
     input  wire  [ 2                    -1 : 0 ]        cfg_mem_req_type,
 
   // Systolic Array
-    output wire  [ BUF_DATA_WIDTH       -1 : 0 ]        buf_read_data,
-    input  wire                                         buf_read_req,
-    input  wire  [ BUF_ADDR_W           -1 : 0 ]        buf_read_addr,
+    output wire  [ BUF_DATA_WIDTH       -1 : 0 ]        buf_read_data,//output
+    input  wire                                         buf_read_req,//input
+    input  wire  [ BUF_ADDR_W           -1 : 0 ]        buf_read_addr,//input
 
   // CL_wrapper -> DDR AXI4 interface
     // Master Interface Write Address
@@ -595,7 +595,7 @@ module wbuf_mem_wrapper #(
     assign tag_buf_read_addr = {compute_tag_delayed, buf_read_addr};
 
   register_sync #(BUF_DATA_WIDTH)
-  buf_read_data_delay (clk, reset, _buf_read_data, buf_read_data);
+  buf_read_data_delay (clk, reset, _buf_read_data, buf_read_data);//一个clk之后再把data传递给output
 
   wbuf #(
     .TAG_W                          ( TAG_W                          ),

@@ -77,8 +77,8 @@ module systolic_array_testbench(
     always#50 clk=~clk;
     
     initial begin
-        ibuf_read_data = {4{16'h1111}};
-        wbuf_read_data = {4{ibuf_read_data}};
+        ibuf_read_data = {16'h0001,16'h0002,16'h0003,16'h0004};
+        wbuf_read_data = {4{4{16'h0005}}};
         bbuf_read_data = {4{32'h1111}}; 
         #100;
         reset<=0;

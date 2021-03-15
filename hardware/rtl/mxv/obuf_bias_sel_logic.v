@@ -35,6 +35,7 @@ module obuf_bias_sel_logic #(
     reg obuf_loop_dep [(1<<LOOP_ID_W)-1:0];
   // Store if current loop variable should use obuf for bias
     reg bias_obuf_status [(1<<LOOP_ID_W)-1:0];
+
   // Store if current loop variable should be stored in ddr or pe
 //    reg ddr_pe_status [(1<<LOOP_ID_W)-1:0];
 //=============================================================
@@ -46,26 +47,26 @@ module obuf_bias_sel_logic #(
     reg  [ 2                    -1 : 0 ]        state_q;
     wire [ 2                    -1 : 0 ]        state;
 
-    localparam integer  ST_IDLE                      = 0;
+    localparam integer  ST_IDLE                      = 0;//state_idle?
     localparam integer  ST_BUSY                      = 1;
 
-  always @(*)
+  always @(*)//IDLE  <-> BUSY 状态互换 for state_d
   begin
     state_d = state_q;
     case(state_q)
       ST_IDLE: begin
-        if (start)
+        if (start)//IDLE -> BUSY
           state_d = ST_BUSY;
       end
       ST_BUSY: begin
-        if (done)
+        if (done)// BUSY -> IDLE
           state_d = ST_IDLE;
       end
     endcase
   end
 
     assign state = state_q;
-  always @(posedge clk)
+  always @(posedge clk)//for state_q
   begin
     if (reset)
       state_q <= ST_IDLE;
@@ -77,14 +78,14 @@ module obuf_bias_sel_logic #(
 //=============================================================
 // Main logic
 //=============================================================
-  always @(posedge clk)
+  always @(posedge clk)//loop_id 
   begin
     if (reset)
       loop_id <= 1'b0;
     else begin
       if (done)
         loop_id <= 1'b0;
-      else if (obuf_stride_v)
+      else if (obuf_stride_v)//incr loop_id
         loop_id <= loop_id + 1'b1;
     end
   end
@@ -92,7 +93,7 @@ module obuf_bias_sel_logic #(
   always @(posedge clk)
   begin
     if (obuf_stride_v)
-      obuf_loop_dep[loop_id] <= obuf_stride != 0;
+      obuf_loop_dep[loop_id] <= obuf_stride != 0;//if current loop variable has a dependency to obuf
   end
 
     reg                                         prev_bias_status;
@@ -101,7 +102,7 @@ module obuf_bias_sel_logic #(
     wire                                        curr_ddr_status;
     reg                                         prev_ddr_status;
 
-    wire                                        curr_loop_dep;
+    wire                                        curr_loop_dep;//if current loop index has a dependency on obuf
 
     reg                                         loop_exit_dly;
     reg                                         loop_enter_dly;
@@ -118,7 +119,7 @@ module obuf_bias_sel_logic #(
     else begin
       if (state != ST_BUSY)
         prev_bias_status <= 1'b0;
-      else begin
+      else begin//state == ST_BUSY
         if (loop_enter && loop_exit_dly)
           prev_bias_status <= curr_bias_status;
         else if (loop_index_valid && ~loop_stall && ~curr_loop_dep)

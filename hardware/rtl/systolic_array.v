@@ -53,7 +53,7 @@ module systolic_array #(
     output wire  [ BBUF_ADDR_WIDTH      -1 : 0 ]        sys_bias_read_addr,//output 读bias地址
 
     input  wire                                         bias_read_req,//输入读bias请求
-    input  wire  [ BBUF_ADDR_WIDTH      -1 : 0 ]        bias_read_addr,
+    input  wire  [ BBUF_ADDR_WIDTH      -1 : 0 ]        bias_read_addr,//bias读地址
     input  wire  [ BBUF_DATA_WIDTH      -1 : 0 ]        bbuf_read_data,//bias data
     input  wire                                         bias_prev_sw,
 
@@ -89,8 +89,8 @@ module systolic_array #(
     wire                                        acc_out_valid_all;//应该叫valid_any
     wire [ SYSTOLIC_OUT_WIDTH   -1 : 0 ]        systolic_out;//临时存放每行PE的计算结果
 
-    wire [ ARRAY_M              -1 : 0 ]        systolic_out_valid;//传播给output sys_obuf_read_req
-    wire [ ARRAY_N              -1 : 0 ]        _systolic_out_valid;//obuf_write_req 激活
+    wire [ ARRAY_M              -1 : 0 ]        systolic_out_valid;//行输出valid,传播给output sys_obuf_read_req
+    wire [ ARRAY_N              -1 : 0 ]        _systolic_out_valid;//列输出valid,obuf_write_req 激活
 
     wire [ OBUF_ADDR_WIDTH      -1 : 0 ]        systolic_out_addr;//NEVER USED
     wire [ OBUF_ADDR_WIDTH      -1 : 0 ]        _systolic_out_addr;//obuf_write_addr赋值而来
@@ -135,16 +135,16 @@ begin: LOOP_OUTPUT_FORWARD
   if (m == 0)//第一行PEs的操作数来自ibuf
   begin
     assign a = ibuf_read_data[n*ACT_WIDTH+:ACT_WIDTH];//截取从n*ACT_WIDTH开始，长ACT_WIDTH的数据
-  end
+  end//end if
   else//m!=0，余下行PEs的操作数分别来自其上一行对应的PE
   begin
     wire [ ACT_WIDTH            -1 : 0 ]        fwd_a;
     assign fwd_a = LOOP_INPUT_FORWARD[m-1].LOOP_OUTPUT_FORWARD[n].a;//对每个inst都传播a
     // register_sync #(ACT_WIDTH) fwd_a_reg (clk, reset, fwd_a, a);
     assign a = fwd_a;//当前的a等于上一轮的a,意味着整个ibuf a只有array_n个数值,这是一维A乘二维B?
-  end
+  end//end else
 
-    assign b = wbuf_read_data[(m+n*ARRAY_M)*WGT_WIDTH+:WGT_WIDTH];//截取从(m+n*ARRAY_M)*WGT_WIDTH开始，长WGT_WIDTH的比特
+  assign b = wbuf_read_data[(m+n*ARRAY_M)*WGT_WIDTH+:WGT_WIDTH];//截取从(m+n*ARRAY_M)*WGT_WIDTH开始，长WGT_WIDTH的比特
     //b的这种m+n*ARRAY_M索引方式，产生的计算顺序就是a一行乘b的一列（正常矩阵计算方法）
   //==============================================================
 
@@ -164,7 +164,7 @@ begin: LOOP_OUTPUT_FORWARD
     .WGT_WIDTH                      ( WGT_WIDTH                      ),
     .PE_OUT_WIDTH                   ( PE_OUT_WIDTH                   )
   ) pe_inst (
-    .clk                            ( clk                            ),  // input
+    .clk                            ( clk                            ),  // input clk,每个PE都需要一个CLK才能计算结束,四行PE就需要四个CLK
     .reset                          ( reset                          ),  // input
     .a                              ( a                              ),  // input
     .b                              ( b                              ),  // input
@@ -216,7 +216,9 @@ endgenerate
       addr_eq <= _addr_eq;
   end
 
-  //acc_state_d trans
+  //acc_state_d trans  
+  //ACC_VALID -> ACC_INVALID (if acc_clear_dly1)
+  //ACC_VALID <- ACC_INVALID (if obuf_write_req)
   always @(*)
   begin
     acc_state_d = acc_state_q;
@@ -254,14 +256,14 @@ endgenerate
 
   generate
     for (i=1; i<ARRAY_N; i=i+1)
-    begin: COL_ACC
-      register_sync #(1) out_valid_delay (clk, reset, _acc[i-1], _acc[i]);//_acc有延迟的传播
+    begin: COL_ACC//列ACC
+      register_sync #(1) out_valid_delay (clk, reset, _acc[i-1], _acc[i]);//列_acc有延迟的传播
     end
 
     for (i=1; i<ARRAY_M; i=i+1)
     begin: ROW_ACC
       // register_sync #(1) out_valid_delay (clk, reset, acc[i-1], acc[i]);
-    assign acc[i] = acc[i-1];//acc无延迟传播
+    assign acc[i] = acc[i-1];//行acc无延迟传播
     end
 
   endgenerate
@@ -271,31 +273,31 @@ endgenerate
 
   generate
     for (i=1; i<ARRAY_N; i=i+1)
-    begin: COL_VALID_OUT//行输出valid
+    begin: COL_VALID_OUT//列输出valid
       register_sync #(1) out_valid_delay (clk, reset, _systolic_out_valid[i-1], _systolic_out_valid[i]);//延迟传播
     end
     for (i=1; i<ARRAY_M; i=i+1)
-    begin: ROW_VALID_OUT//列输出valid
-      register_sync #(1) out_valid_delay (clk, reset, systolic_out_valid[i-1], systolic_out_valid[i]);
+    begin: ROW_VALID_OUT//行输出valid,除了[0]以外,其他的没用 FIXME:优化
+      register_sync #(1) out_valid_delay (clk, reset, systolic_out_valid[i-1], systolic_out_valid[i]);//延迟传播
     end
   endgenerate
-    assign systolic_out_valid[0] = _systolic_out_valid[ARRAY_N-1];
+    assign systolic_out_valid[0] = _systolic_out_valid[ARRAY_N-1];//列输出valid传播结束后, 才赋值给行输出valid
 
 
-  generate
-    for (i=0; i<ARRAY_N+2; i=i+1)
+  generate//TODO: 为什么要多给2个CLOCK做延迟?(留给累加器吗),从0时刻延迟到N+1,从input传递出ouput,对齐时钟吗
+    for (i=0; i<ARRAY_N+2; i=i+1) 
     begin: COL_ADDR_OUT
     wire [ OBUF_ADDR_WIDTH      -1 : 0 ]        prev_addr;
     wire [ OBUF_ADDR_WIDTH      -1 : 0 ]        next_addr;
       if (i==0)
-    assign prev_addr = _systolic_out_addr;
-      else
+    assign prev_addr = _systolic_out_addr;//input obuf_write_addr
+      else//i!=0 , prev_addr has been assigned 
     assign prev_addr = COL_ADDR_OUT[i-1].next_addr;
-      register_sync #(OBUF_ADDR_WIDTH) out_addr (clk, reset, prev_addr, next_addr);
-    end
+      register_sync #(OBUF_ADDR_WIDTH) out_addr (clk, reset, prev_addr, next_addr);//延迟传播给next
+    end//for
   endgenerate
-
-    assign sys_obuf_write_addr = COL_ADDR_OUT[ARRAY_N+1].next_addr;
+    //赋值到这里时,已经过去ARRAY_N+2个CLK
+    assign sys_obuf_write_addr = COL_ADDR_OUT[ARRAY_N+1].next_addr;//最后一个next_addr,output wire
 
 
   generate
@@ -304,29 +306,29 @@ endgenerate
     wire [ OBUF_ADDR_WIDTH      -1 : 0 ]        prev_addr;
     wire [ OBUF_ADDR_WIDTH      -1 : 0 ]        next_addr;
       if (i==1)
-    assign prev_addr = _systolic_in_addr;
+    assign prev_addr = _systolic_in_addr;//input obuf_read_addr
       else
     assign prev_addr = COL_ADDR_IN[i-1].next_addr;
       register_sync #(OBUF_ADDR_WIDTH) out_addr (clk, reset, prev_addr, next_addr);
     end
   endgenerate
-    assign sys_obuf_read_addr = COL_ADDR_IN[ARRAY_N-1].next_addr;
+    assign sys_obuf_read_addr = COL_ADDR_IN[ARRAY_N-1].next_addr;//从input延迟N个clock传递给output
 
   // Delay logic for bias reads
   register_sync #(BBUF_ADDR_WIDTH) bias_addr_delay (clk, reset, bias_read_addr, _bias_read_addr);
   register_sync #(1) bias_req_delay (clk, reset, bias_read_req, _bias_read_req);
   generate
-    for (i=1; i<ARRAY_N; i=i+1)
-    begin: BBUF_COL_ADDR_IN
+    for (i=1; i<ARRAY_N; i=i+1)//N-1个
+    begin: BBUF_COL_ADDR_IN//列
     wire [ BBUF_ADDR_WIDTH      -1 : 0 ]        prev_addr;
     wire [ BBUF_ADDR_WIDTH      -1 : 0 ]        next_addr;
     wire                                        prev_req;
     wire                                        next_req;
-      if (i==1) begin
+      if (i==1) begin//初始化
     assign prev_addr = _bias_read_addr;
     assign prev_req = _bias_read_req;
       end
-      else begin
+      else begin//传递
     assign prev_addr = BBUF_COL_ADDR_IN[i-1].next_addr;
     assign prev_req = BBUF_COL_ADDR_IN[i-1].next_req;
       end
@@ -334,8 +336,8 @@ endgenerate
       register_sync #(1) out_req (clk, reset, prev_req, next_req);
     end
   endgenerate
-    assign sys_bias_read_addr = BBUF_COL_ADDR_IN[ARRAY_N-1].next_addr;
-    assign sys_bias_read_req = BBUF_COL_ADDR_IN[ARRAY_N-1].next_req;
+    assign sys_bias_read_addr = BBUF_COL_ADDR_IN[ARRAY_N-1].next_addr;//获取最后一个addr,从input到这里延迟了N个CLK
+    assign sys_bias_read_req = BBUF_COL_ADDR_IN[ARRAY_N-1].next_req;//获取最后一个req,从input到这里延迟了N个CLK
 
   //=========================================
 
@@ -346,7 +348,7 @@ endgenerate
     assign obuf_write_data = accumulator_out;//PE和累加之后的结果
     assign sys_obuf_read_req = systolic_out_valid[0];
   register_sync #(1) acc_out_vld (clk, reset, systolic_out_valid[0], acc_out_valid);
-    wire                                        _sys_obuf_write_req;
+    wire  _sys_obuf_write_req;
   register_sync #(1) sys_obuf_write_req_delay (clk, reset, acc_out_valid, _sys_obuf_write_req);
   register_sync #(1) _sys_obuf_write_req_delay (clk, reset, _sys_obuf_write_req, sys_obuf_write_req);
   // assign sys_obuf_write_req = acc_out_valid;
@@ -365,13 +367,13 @@ endgenerate
     wire [ ARRAY_M              -1 : 0 ]        bias_sel;
     wire                                        _bias_sel;
   // assign col_bias_sw[0] = bias_prev_sw;
-  register_sync #(1) row_bias_sel_delay (clk, reset, bias_prev_sw, col_bias_sw[0]);
-  register_sync #(1) col_bias_sel_delay (clk, reset, col_bias_sw[ARRAY_N-1], _bias_sel);
-  register_sync #(1) _bias_sel_delay (clk, reset, _bias_sel, bias_sel[0]);
+  register_sync #(1) row_bias_sel_delay (clk, reset, bias_prev_sw, col_bias_sw[0]);//CLK 0
+  register_sync #(1) col_bias_sel_delay (clk, reset, col_bias_sw[ARRAY_N-1], _bias_sel);//CLK N
+  register_sync #(1) _bias_sel_delay (clk, reset, _bias_sel, bias_sel[0]);//CLK N+1
   generate
     for (i=1; i<ARRAY_N; i=i+1)
     begin: ADD_SRC_SEL_COL
-      register_sync #(1) col_bias_sel_delay (clk, reset, col_bias_sw[i-1], col_bias_sw[i]);
+      register_sync #(1) col_bias_sel_delay (clk, reset, col_bias_sw[i-1], col_bias_sw[i]);//DELAY N-1
     end
     for (i=1; i<ARRAY_M; i=i+1)
     begin: ADD_SRC_SEL

@@ -440,7 +440,7 @@ module dnnweaver2_controller #(
     wire [ IBUF_ADDR_WIDTH      -1 : 0 ]        ibuf_read_addr;
 
   // WBUF
-    wire [ WBUF_DATA_WIDTH      -1 : 0 ]        wbuf_read_data;
+    wire [ WBUF_DATA_WIDTH      -1 : 0 ]        wbuf_read_data;//definition
     wire                                        wbuf_read_req;
     wire [ WBUF_ADDR_WIDTH      -1 : 0 ]        wbuf_read_addr;
 
@@ -969,8 +969,8 @@ module dnnweaver2_controller #(
     .cfg_mem_req_id                 ( cfg_mem_req_id                 ), // specify which scratchpad
     .cfg_mem_req_loop_id            ( cfg_mem_req_loop_id            ), // specify which loop
 
-    .buf_read_data                  ( wbuf_read_data                 ),
-    .buf_read_req                   ( wbuf_read_req                  ),
+    .buf_read_data                  ( wbuf_read_data                 ),//获取wgt
+    .buf_read_req                   ( wbuf_read_req                  ),//wbuf req
     .buf_read_addr                  ( wbuf_read_addr                 ),
 
     .mws_awaddr                     ( cl_ddr2_awaddr                 ),
@@ -1203,7 +1203,7 @@ module dnnweaver2_controller #(
 
     .ibuf_read_data                 ( ibuf_read_data                 ),
 
-    .wbuf_read_data                 ( wbuf_read_data                 ),
+    .wbuf_read_data                 ( wbuf_read_data                 ),//input weight
 
     .bbuf_read_data                 ( bbuf_read_data                 ),
     .bias_read_req                  ( bias_read_req                  ),
@@ -1282,7 +1282,7 @@ module dnnweaver2_controller #(
     assign {obuf_in3, obuf_in2, obuf_in1, obuf_in0} = obuf_read_data;
     assign {bias_in3, bias_in2, bias_in1, bias_in0} = bbuf_read_data;
     assign {obuf_mem_out1, obuf_mem_out0} = cl_ddr1_wdata;
-
+//FIXME: 没有用
     assign ibuf_in0 = ibuf_read_data[15:0];
     assign ibuf_in1 = ibuf_read_data[31:16];
     assign ibuf_in2 = ibuf_read_data[47:32];
@@ -1312,7 +1312,7 @@ module dnnweaver2_controller #(
     assign wbuf_in13 = wbuf_read_data[223:208];
     assign wbuf_in14 = wbuf_read_data[239:224];
     assign wbuf_in15 = wbuf_read_data[255:240];
-
+//END of FIXME:
     assign obuf_write_data = sys_obuf_write_data;
 //=============================================================
 

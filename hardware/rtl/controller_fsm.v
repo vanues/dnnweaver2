@@ -20,14 +20,14 @@ module controller_fsm #(
   // Internal Parameters
   parameter integer  STATE_W                      = 3,
   parameter integer  LOOP_STATE_W                 = LOOP_ID_W,
-  parameter integer  STACK_DEPTH                  = (1 << IMEM_ADDR_W)
+  parameter integer  STACK_DEPTH                  = (1 << IMEM_ADDR_W)//d:2^5 = 32
 ) (
   input  wire                                         clk,
   input  wire                                         reset,
 
   // Start and Done handshake signals
   input  wire                                         start,
-  output wire                                         done,
+  output wire                                         done,//output
   input  wire                                         stall,
 
   // Loop instruction valid
@@ -35,12 +35,12 @@ module controller_fsm #(
   input  wire  [ LOOP_ITER_W          -1 : 0 ]        cfg_loop_iter,
   input  wire  [ LOOP_ID_W            -1 : 0 ]        cfg_loop_iter_loop_id,
 
-  output wire  [ LOOP_ID_W            -1 : 0 ]        loop_index,
-  output wire                                         loop_index_valid,
-  output wire                                         loop_last_iter,
-  output wire                                         loop_init,
-  output wire                                         loop_enter,
-  output wire                                         loop_exit
+  output wire  [ LOOP_ID_W            -1 : 0 ]        loop_index,//output
+  output wire                                         loop_index_valid,//output
+  output wire                                         loop_last_iter,//output
+  output wire                                         loop_init,//output
+  output wire                                         loop_enter,//output
+  output wire                                         loop_exit//output
 );
 
 
@@ -154,17 +154,20 @@ module controller_fsm #(
           state_d = INIT_LOOP;
         end
       end
+
       INIT_LOOP: begin
         if (max_loop_ptr != 0)
           loop_index_d = loop_index_q - 1'b1;
         if (loop_index_q == 1 || loop_index_q == 0)
           state_d = INNER_LOOP;
       end
+
       ENTER_LOOP: begin
         loop_index_d = loop_index_q - 1'b1;
         if (loop_index_q == 1)
           state_d = INNER_LOOP;
       end
+
       INNER_LOOP: begin
         if (done)
           state_d = IDLE;
@@ -178,6 +181,7 @@ module controller_fsm #(
             state_d = IDLE;
         end
       end
+
       EXIT_LOOP: begin
         if (done)
         begin
@@ -189,6 +193,7 @@ module controller_fsm #(
         else if (!loop_last_iter)
           state_d = ENTER_LOOP;
       end
+
       default: begin
         state_d = IDLE;
         loop_index_d = 0;
