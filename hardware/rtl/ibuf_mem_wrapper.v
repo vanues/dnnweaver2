@@ -567,7 +567,7 @@ module ibuf_mem_wrapper #(
     // AXI RD Req
     .rd_req_id                      ( axi_rd_req_id                  ),
     .rd_req                         ( axi_rd_req                     ),
-    .rd_done                        ( axi_rd_done                    ),
+    .rd_done                        ( axi_rd_done                    ),//output
     .rd_ready                       ( axi_rd_ready                   ),
     .rd_req_size                    ( axi_rd_req_size                ),
     .rd_addr                        ( axi_rd_addr                    ),

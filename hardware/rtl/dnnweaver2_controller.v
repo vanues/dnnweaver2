@@ -566,6 +566,8 @@ module dnnweaver2_controller #(
 //=============================================================
   // TODO: bias tag handling
   // Use the bias tag ready when obuf not needed
+
+  //compute_req为1后，controller_fsm的start开始
     assign compute_req = ibuf_compute_ready && wbuf_compute_ready && obuf_compute_ready && bias_compute_ready;
     assign tag_ready = (ibuf_tag_ready && wbuf_tag_ready && obuf_tag_ready && bias_tag_ready);
 
@@ -861,7 +863,7 @@ module dnnweaver2_controller #(
     .reset                          ( reset                          ), //input
 
     .compute_done                   ( compute_done                   ), //input
-    .compute_ready                  ( ibuf_compute_ready             ), //input
+    .compute_ready                  ( ibuf_compute_ready             ), //output
     .compute_bias_prev_sw           (                                ), //output
 
     .block_done                     ( tag_flush                      ), //input
@@ -884,43 +886,43 @@ module dnnweaver2_controller #(
     .cfg_loop_stride_type           ( cfg_loop_stride_type           ), //input
     .cfg_loop_stride_id             ( cfg_loop_stride_id             ), //input
 
-    .cfg_mem_req_v                  ( cfg_mem_req_v                  ),
-    .cfg_mem_req_size               ( cfg_mem_req_size               ),
-    .cfg_mem_req_type               ( cfg_mem_req_type               ), // 0: RD, 1:WR
-    .cfg_mem_req_id                 ( cfg_mem_req_id                 ), // specify which scratchpad
-    .cfg_mem_req_loop_id            ( cfg_mem_req_loop_id            ), // specify which loop
+    .cfg_mem_req_v                  ( cfg_mem_req_v                  ),//input
+    .cfg_mem_req_size               ( cfg_mem_req_size               ),//input
+    .cfg_mem_req_type               ( cfg_mem_req_type               ),//input // 0: RD, 1:WR
+    .cfg_mem_req_id                 ( cfg_mem_req_id                 ),//input // specify which scratchpad
+    .cfg_mem_req_loop_id            ( cfg_mem_req_loop_id            ),//input // specify which loop
 
-    .buf_read_data                  ( ibuf_read_data                 ),
-    .buf_read_req                   ( ibuf_read_req                  ),
-    .buf_read_addr                  ( ibuf_read_addr                 ),
+    .buf_read_data                  ( ibuf_read_data                 ),//output
+    .buf_read_req                   ( ibuf_read_req                  ),//input
+    .buf_read_addr                  ( ibuf_read_addr                 ),//input
 
-    .mws_awaddr                     ( cl_ddr0_awaddr                 ),
-    .mws_awlen                      ( cl_ddr0_awlen                  ),
-    .mws_awsize                     ( cl_ddr0_awsize                 ),
-    .mws_awburst                    ( cl_ddr0_awburst                ),
-    .mws_awvalid                    ( cl_ddr0_awvalid                ),
-    .mws_awready                    ( cl_ddr0_awready                ),
-    .mws_wdata                      ( cl_ddr0_wdata                  ),
-    .mws_wstrb                      ( cl_ddr0_wstrb                  ),
-    .mws_wlast                      ( cl_ddr0_wlast                  ),
-    .mws_wvalid                     ( cl_ddr0_wvalid                 ),
-    .mws_wready                     ( cl_ddr0_wready                 ),
-    .mws_bresp                      ( cl_ddr0_bresp                  ),
-    .mws_bvalid                     ( cl_ddr0_bvalid                 ),
-    .mws_bready                     ( cl_ddr0_bready                 ),
-    .mws_araddr                     ( cl_ddr0_araddr                 ),
-    .mws_arid                       ( cl_ddr0_arid                   ),
-    .mws_arlen                      ( cl_ddr0_arlen                  ),
-    .mws_arsize                     ( cl_ddr0_arsize                 ),
-    .mws_arburst                    ( cl_ddr0_arburst                ),
-    .mws_arvalid                    ( cl_ddr0_arvalid                ),
-    .mws_arready                    ( cl_ddr0_arready                ),
-    .mws_rdata                      ( cl_ddr0_rdata                  ),
-    .mws_rid                        ( cl_ddr0_rid                    ),
-    .mws_rresp                      ( cl_ddr0_rresp                  ),
-    .mws_rlast                      ( cl_ddr0_rlast                  ),
-    .mws_rvalid                     ( cl_ddr0_rvalid                 ),
-    .mws_rready                     ( cl_ddr0_rready                 )
+    .mws_awaddr                     ( cl_ddr0_awaddr                 ),//output
+    .mws_awlen                      ( cl_ddr0_awlen                  ),//output
+    .mws_awsize                     ( cl_ddr0_awsize                 ),//output
+    .mws_awburst                    ( cl_ddr0_awburst                ),//output
+    .mws_awvalid                    ( cl_ddr0_awvalid                ),//output
+    .mws_awready                    ( cl_ddr0_awready                ),//input
+    .mws_wdata                      ( cl_ddr0_wdata                  ),//output
+    .mws_wstrb                      ( cl_ddr0_wstrb                  ),//output
+    .mws_wlast                      ( cl_ddr0_wlast                  ),//output
+    .mws_wvalid                     ( cl_ddr0_wvalid                 ),//output
+    .mws_wready                     ( cl_ddr0_wready                 ),//input
+    .mws_bresp                      ( cl_ddr0_bresp                  ),//input
+    .mws_bvalid                     ( cl_ddr0_bvalid                 ),//input
+    .mws_bready                     ( cl_ddr0_bready                 ),//output
+    .mws_araddr                     ( cl_ddr0_araddr                 ),//output
+    .mws_arid                       ( cl_ddr0_arid                   ),//output
+    .mws_arlen                      ( cl_ddr0_arlen                  ),//output
+    .mws_arsize                     ( cl_ddr0_arsize                 ),//output
+    .mws_arburst                    ( cl_ddr0_arburst                ),//output
+    .mws_arvalid                    ( cl_ddr0_arvalid                ),//output
+    .mws_arready                    ( cl_ddr0_arready                ),//input
+    .mws_rdata                      ( cl_ddr0_rdata                  ),//input
+    .mws_rid                        ( cl_ddr0_rid                    ),//input
+    .mws_rresp                      ( cl_ddr0_rresp                  ),//input
+    .mws_rlast                      ( cl_ddr0_rlast                  ),//input
+    .mws_rvalid                     ( cl_ddr0_rvalid                 ),//input
+    .mws_rready                     ( cl_ddr0_rready                 )//output
     );
 
   wbuf_mem_wrapper #(

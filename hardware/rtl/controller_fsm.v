@@ -26,16 +26,16 @@ module controller_fsm #(
   input  wire                                         reset,
 
   // Start and Done handshake signals
-  input  wire                                         start,
+  input  wire                                         start,//idle -> init_loop
   output wire                                         done,//output
   input  wire                                         stall,
 
   // Loop instruction valid
-  input  wire                                         cfg_loop_iter_v,
-  input  wire  [ LOOP_ITER_W          -1 : 0 ]        cfg_loop_iter,
-  input  wire  [ LOOP_ID_W            -1 : 0 ]        cfg_loop_iter_loop_id,
+  input  wire                                         cfg_loop_iter_v,// -> loop_wr_req
+  input  wire  [ LOOP_ITER_W          -1 : 0 ]        cfg_loop_iter,// -> loop_wr_max_iter
+  input  wire  [ LOOP_ID_W            -1 : 0 ]        cfg_loop_iter_loop_id,//-> loop_wr_ptr
 
-  output wire  [ LOOP_ID_W            -1 : 0 ]        loop_index,//output
+  output wire  [ LOOP_ID_W            -1 : 0 ]        loop_index,//output  <- loop_index_q
   output wire                                         loop_index_valid,//output
   output wire                                         loop_last_iter,//output
   output wire                                         loop_init,//output
@@ -87,15 +87,15 @@ module controller_fsm #(
       max_loop_ptr <= cfg_loop_iter_loop_id;
   end
 
-  assign loop_rd_v = iter_rd_v;
-  assign loop_rd_ptr = iter_rd_ptr;
+  assign loop_rd_v = iter_rd_v;    //s_read_req  , = (state != IDLE)
+  assign loop_rd_ptr = iter_rd_ptr;//s_read_addr , = loop_index
 
   /*
   * This module stores the loop max iterations.
   */
-  assign loop_wr_ptr = cfg_loop_iter_loop_id;
-  assign loop_wr_req = cfg_loop_iter_v;
-  assign loop_wr_max_iter = cfg_loop_iter;
+  assign loop_wr_ptr = cfg_loop_iter_loop_id; //loop_wr_ptr
+  assign loop_wr_req = cfg_loop_iter_v;       //s_write_req
+  assign loop_wr_max_iter = cfg_loop_iter;    //s_write_data
   ram #(
     .ADDR_WIDTH                     ( IMEM_ADDR_W                    ),
     .DATA_WIDTH                     ( LOOP_ITER_W                    )
@@ -107,7 +107,7 @@ module controller_fsm #(
     .s_write_data                   ( loop_wr_max_iter               ),
     .s_read_addr                    ( loop_rd_ptr                    ),
     .s_read_req                     ( loop_rd_v                      ),
-    .s_read_data                    ( loop_rd_max                    )
+    .s_read_data                    ( loop_rd_max                    )//output
   );
 //=============================================================
 
@@ -129,7 +129,7 @@ module controller_fsm #(
     .s_write_data                   ( iter_wr_data                   ),
     .s_read_addr                    ( iter_rd_ptr                    ),
     .s_read_req                     ( iter_rd_v                      ),
-    .s_read_data                    ( iter_rd_data                   )
+    .s_read_data                    ( iter_rd_data                   )//output
   );
 //=============================================================
 
@@ -150,7 +150,7 @@ module controller_fsm #(
     case (state_q)
       IDLE: begin
         loop_index_d = max_loop_ptr;
-        if (start) begin
+        if (start) begin//start: 从idle -> init_loop
           state_d = INIT_LOOP;
         end
       end
@@ -200,7 +200,7 @@ module controller_fsm #(
       end
     endcase
   end
-
+//loop_index_q
   always @(posedge clk)
   begin
     if (reset)
@@ -210,7 +210,7 @@ module controller_fsm #(
   end
 
   assign loop_index = loop_index_q;
-
+//state_q
   always @(posedge clk or posedge reset)
   begin
     if (reset)
@@ -241,10 +241,10 @@ module controller_fsm #(
   assign iter_wr_v = loop_wr_req || state == EXIT_LOOP || (state == INNER_LOOP && !stall);
 
   assign iter_wr_data = state == IDLE ? 'b0 :
-                        loop_last_iter ? 'b0 : iter_rd_data + 1'b1;
+                        loop_last_iter ? 'b0 : iter_rd_data + 1'b1;//一直+1，直到idle或者loop_last_iter(最后一次iter)
   assign iter_wr_ptr = state == IDLE ? cfg_loop_iter_loop_id : loop_index;
 
-  assign loop_last_iter = iter_rd_data == loop_rd_max;
+  assign loop_last_iter = iter_rd_data == loop_rd_max;//当前的data和最大data一致，最后一次iter
 
 //=============================================================
 
